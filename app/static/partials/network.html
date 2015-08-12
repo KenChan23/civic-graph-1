@@ -1,7 +1,7 @@
 <div class='network-container' ng-controller='networkCtrl'>
     <button ng-show='!settingsEnabled && !mobile' ng-click='toggleSettings()' class='glyphicon glyphicon-align-justify hambDesktop' ></button>
 
-    <svg id="network" ng-if="!mobile" ng-style="{height: mobile && (clickedEntity.entity || showLicense) ? '75vh' : '100vh' }"></svg>
+    <svg id="network" ng-if="!mobile" ng-style="{height: '100vh'}"></svg>
     <div id="canvas-force" ng-if="mobile" ng-style="{height: '100vh' }"><div id="nloader"><div class="loader"></div><p>Loading...</p></div>
     </div>
 
@@ -14,4 +14,5 @@
     <div ng-click="switchView()" ng-show='showView.Network' class="mViewSwitch">
     	<img alt="Map" src="img/globe.png" width="30" height="30">
     </div>
+    <div ng-show='mobile && !showLicense' ng-click='showAbout()' id="qmark">?</div>
 </div>

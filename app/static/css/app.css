@@ -134,14 +134,18 @@ p {
 .Data-checkbox {
     background-color: dodgerblue
 }
-
 .angular-leaflet-map {
     height: 100vh;
+}
+.angular-leaflet-map-mobile {
+    /*height: 93vh;*/
+}
+.leaflet-top {
+    top: 8%;
 }
 .main-container {
 }
 .map-container {
-    height: 100%;
     margin-left: -15px;
     margin-right: -15px;
 }
@@ -170,6 +174,9 @@ p {
     text-align: left;
     margin-bottom: 3px;
 }
+.edit-panelMb {
+    margin-top: 10%;
+}
 .edit-form {
 }
 /* Metadata field padding.*/
@@ -181,6 +188,17 @@ p {
     float: right;
     cursor: pointer;
     opacity: 0.6;
+}
+.marker-mobile{
+    position: fixed;
+    top:1.5%;
+    right:5px;
+    opacity: 1  ;
+    min-height: 20px;
+    font-size: 19pt;
+    color: #757171;
+    padding: 6px;
+    z-index: 2;
 }
 .edit-marker:hover {
     opacity: 1;
@@ -235,16 +253,16 @@ p {
 }
 /* CATEGORIZED LINK STYLES */
 .Employment-link {
-    stroke: purple;
+    stroke: #EE73FF;
 }
 .Funding-link {
-    stroke: rgb(242, 80, 34);
+    stroke: #FF7460;
 }
 .Collaboration-link {
-    stroke: yellow;
+    stroke: #FFD955;
 }
 .Data-link {
-    stroke: blue;
+    stroke: #84C2FF;
 }
 .Relation-link {
     stroke: red;
@@ -391,7 +409,6 @@ p {
     color: #9E9E9E;
     font-weight: 400;
     font-size: 0.9em;
-    z-index: 12;
     pointer-events: none;
     bottom: 10%;
     position: fixed;
@@ -402,7 +419,9 @@ p {
 .licenseMob a {
     pointer-events: auto;
 }
-
+#networkCanvas{
+    z-index: 1;
+}
 .settingsmobile {
     width: 100%;
     resize:vertical;
@@ -439,14 +458,10 @@ p {
 }
 .addInfoMobile {
     float: right;
-    height: 7vh;
-    width: 7vh;
-    border: 0.5vh solid transparent;
-    color: white;
-    background-color: blue;
-    background-clip: padding-box;
-    font-size: 10pt;
+    height: 100%;
+    margin: 5px 5px 0 0;
 }
+
 .addInfoDesktop {
     transition: opacity 0.1s linear;
     margin-top: 3px;
@@ -494,9 +509,9 @@ p {
 }
 .details-panel a {
     text-align: center;
-    display: block;
     color: #2e92cf;
     text-decoration: none;
+    display: block;
 }
 .details-panel a:hover {
     opacity: 0.7;
@@ -511,6 +526,10 @@ p {
     left: 0;
     bottom: 0;
     padding-bottom: 35px;
+    text-align: center;
+}
+.details-panelMb a{
+    margin: 2%;
 }
 .overview-type {
     text-align: center;
@@ -525,23 +544,27 @@ p {
     display: inline-block;
 }
 .navLogoMobile{
+    background-color: rgba(255,255,255,0.7);
     text-align: center;
     height: 7vh;
-    z-index: 30;
+    width: 100%;
+    z-index: 2;
     min-height: 30px;
     text-align: center;
+    position: fixed;
 }
 .navLogoMobileBackground{
     border-bottom: 1px solid grey;
     text-align: center;
     height: 7vh;
-    z-index: 30;
+    z-index: 1;
     min-height: 30px;
-    background-color: #D0D0D0;
 }
 .logoMob{
     padding-top: 1%;
     height: 90%;
+    /*float: left;*/
+    text-align: center;
 }
 .save {
     text-align: center;
@@ -631,6 +654,7 @@ p {
     border: 1px solid #757171;
     width: 6vh;
     height: 6vh;
+    z-index: 2;
     vertical-align: middle;
     display: inline-block;
     text-align: center;
@@ -646,4 +670,113 @@ p {
 .mLegend{
     margin: 0;
 }
+.mapLicense{
+    position: absolute;
+    bottom: 0;
+    right:0;
+    font-size: 0.8em;
+}
+.angular-leaflet-map-mobile .mapLicense {
+    right: 7vh;
+}
+.ng-invalid.ng-dirty {
+    border-color: red;
+}
+.ng-valid.ng-dirty {
+    border-color: green;
+}
+#nloader{
+    margin-top: 45%;
+}
+.logoContainer{
+    height: 80%;
+    width: 10%;
+    float: right;
+    display: inline-block;
+}
+.bluebtn{
+    transition: opacity 0.1s linear;
+    margin-top: 3px;
+    background-color: #1ea4eb;
+    border: 2px solid white;
+    text-align: center;
+    vertical-align: middle;
+    width: 100%;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    vertical-align: middle;
+    color: white;
+    font-size: 13pt;
+    font-weight: 600;
+}
+.bluebtn:hover {
+    opacity: 0.8;
+    color: white;
+}
+.btn.disabled, .btn[disabled], fieldset[disabled] .btn {
+    background-color: #BDC4C0;
+    opacity: .65;
+}
+.topContainer a{
+    display: inline;
+}
+/*//EVENT ANIMATIONS FOR MOBILE*/
+.scroll-up {
+    -webkit-transition:all linear 0.5s;
+    transition:all linear 0.5s;
+    max-height: 999px;
+    margin-top: 7vh;
 
+}
+.scroll-up.ng-hide {
+    max-height: 0px;
+}
+.animate-if.ng-enter {
+    -webkit-transition: 0.5s linear all;
+    -moz-transition: 0.5s linear all;
+    -ms-transition: 0.5s linear all;
+    -o-transition: 0.5s linear all;
+    transition: 0.5s linear all;
+}
+.animate-if.ng-enter {
+    margin-top: 100vh;
+}
+.animate-if.ng-enter.ng-enter-active {
+    margin-top: 7vh;
+}
+.details-animate.ng-enter, .details-animate.ng-leave {
+    -webkit-transition: 1s linear all;
+    -moz-transition: 1s linear all;
+    -ms-transition: 1s linear all;
+    -o-transition: 1s linear all;
+    transition: 1s linear all;
+}
+.details-animate.ng-enter {
+    max-height: 0px;
+}
+.details-animate.ng-enter.ng-enter-active {
+    max-height: 400px;
+}
+.details-animate.ng-leave {
+    max-height: 400px;
+}
+.details-animate.ng-leave.ng-leave-active {
+    max-height: 0px;
+}
+.details-animateshow.ng-hide {
+    max-height: 999px;
+}
+#qmark {
+    font-size: 1.5em;
+    font-weight: 800;
+    line-height: 6vh;
+    text-align: center;
+    color: #757171;
+    border: 1px solid #757171;
+    left: 2px;
+    bottom: 2px;
+    position: fixed;
+    width: 6vh;
+    height: 6vh;
+    z-index: 2;
+}

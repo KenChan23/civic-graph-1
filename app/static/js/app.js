@@ -1,13 +1,38 @@
-angular.module('civic-graph', ['ui.bootstrap', 'leaflet-directive'])
+angular.module('civic-graph', ['ui.bootstrap', 'leaflet-directive', 'ngAnimate'])
 .constant('_', window._)
 .config(['$locationProvider', '$httpProvider', function($locationProvider, $httpProvider) {
     $locationProvider.html5Mode(true);
     $httpProvider.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
 }])
+.directive('addMobileEvents', function () {
+    return {
+        restrict: 'A',
+        link: function (scope, element, attrs) {
+            if (scope.mobile) {
+                $("#details-panel").css( "height", "20vh");
+                $("#details-panel").scrollTop(0);
+                $('#details-panel').scroll(function() {
+                    $(this).css('height','50vh');
+                });
+                $( "#details-panel" ).click(function(e) {
+                    if (window.innerHeight/3 > parseInt($(this).css('height'))) {
+                        $(this).css('height','50vh');
+                    } else {
+                        $(this).css('height','20vh');
+                    }
+                });
+            }
+        }
+    };
+})
 .controller('homeCtrl', ['$scope', '$http', '$location', '$modal', function($scope, $http, $location, $modal) {
     $scope.random = new Date().getTime();
     $scope.entities = [];
+    $scope.searchItems = null;
     $scope.categories = [];
+    $scope.currentLocation = null;
+    $scope.clickedLocation = {};
+    $scope.clickedLocation.location = null;
     $scope.currentEntity;
     $scope.clickedEntity = {};
     $scope.clickedEntity.entity = null;
@@ -35,6 +60,25 @@ angular.module('civic-graph', ['ui.bootstrap', 'leaflet-directive'])
     $http.get('api/entities')
         .success(function(data) {
             $scope.entities = data.nodes;
+            var locations = _.uniq(_.pluck(_.flatten(_.pluck($scope.entities, 'locations')), 'locality'));
+
+            var entitiesByLocation = _.map(locations, function(loc){
+                var findings = _.filter($scope.entities, _.flow(
+                                 _.property('locations'),
+                                 _.partialRight(_.any, { locality : loc })
+                               ));
+
+                return {
+                    name: loc,
+                    type: 'location',
+                    entities: findings,
+                    dict: _.zipObject(_.pluck(findings, 'name'), _.pluck(findings, 'index'))
+                }
+            });
+
+            $scope.searchItems = entitiesByLocation.concat($scope.entities);
+
+
             if ($scope.getURLID()) {
                 // Set the entity to the ID in the URL if it exists.
                 $scope.setEntityID($scope.getURLID());
@@ -84,10 +128,35 @@ angular.module('civic-graph', ['ui.bootstrap', 'leaflet-directive'])
     $scope.setEntityID = function(id) {
         $scope.setEntity(_.find($scope.entities, {'id': id}));
     }
-    $scope.selectEntity = function(entity) {
-        entity % 1 === 0 ? $scope.setEntityID(entity) : $scope.setEntity(entity);
-        $scope.$broadcast('selectEntity');
-    };
+    // $scope.selectItem = function(entity) {
+    //     entity % 1 === 0 ? $scope.setEntityID(entity) : $scope.setEntity(entity);
+    //     $scope.$broadcast('selectItem
+    // };
+    $scope.setLocation = function(location){
+        $scope.currentLocation = location;
+        if ($scope.editing){
+            $scope.stopEdit();
+        }
+        $scope.$broadcast('itemChange');
+    }
+
+    $scope.selectItem = function(item){
+        if(item.type === 'location'){
+            $scope.setLocation(item);
+        }
+        else{
+            item % 1 === 0 ? $scope.setEntityID(item) : $scope.setEntity(item);
+        }
+        $scope.$broadcast('selectItem', item);
+    }
+
+    $scope.$on('setCurrentEntity', function(event, args){
+        $scope.currentEntity = args.value;
+    });
+
+    $scope.$on('setCurrentLocation', function(event, args){
+        $scope.currentLocation = args.value;
+    });
     $scope.setEntities = function(entities) {
         $scope.entities = entities;
     }
@@ -259,7 +328,25 @@ angular.module('civic-graph', ['ui.bootstrap', 'leaflet-directive'])
     $scope.addBlankFields();
 
     $scope.isValid = function() {
-        return $scope.editEntity.type != null && $scope.editEntity.name && $scope.editEntity.name.length > 0;
+        function entitySelected(arrayofentityarrays){
+            var collaborationIsValid = true;
+            _.each(arrayofentityarrays, function(arrayofentities){
+                _.each(arrayofentities, function(c){
+                    if (!c.entity && c.entity != ""){
+                    collaborationIsValid = false;
+                    }
+                })
+            })
+            return collaborationIsValid
+        }
+        var arrayofentityarrays = [
+        $scope.editEntity.collaborations, $scope.editEntity.employments,
+        $scope.editEntity.relations, $scope.editEntity.data_received,
+        $scope.editEntity.data_given, $scope.editEntity.grants_given,
+        $scope.editEntity.grants_received, $scope.editEntity.investments_made,
+        $scope.editEntity.investments_received
+        ]
+        return $scope.editEntity.type != null && $scope.editEntity.name && $scope.editEntity.name.length > 0 && entitySelected(arrayofentityarrays);
     }
     var removeCommas = function(finances) {
         _.forEach(finances, function(f) {
@@ -347,7 +434,7 @@ angular.module('civic-graph', ['ui.bootstrap', 'leaflet-directive'])
         // Only show labels on top 5 most connected entities initially.
         _.forEach(_.keys($scope.entityTypes), function(type) {
             // Find the top 5 most-connected entities.
-            var top5 = _.takeRight(_.sortBy(_.filter($scope.entities, {'type': type}), 'weight'), 5);
+            var top5 = _.takeRight(_.sortBy(_.filter($scope.entities, {'type': type}), 'collaborations.length'), 5);
             _.forEach(top5, function(entity) {entity.wellconnected = true;});
         });
 
@@ -370,10 +457,10 @@ angular.module('civic-graph', ['ui.bootstrap', 'leaflet-directive'])
             height = $('#canvas-force').height();
 
         var offsets = {
-            'Government': [-90,-90-(height/6)],
-            'Non-Profit': [-90,90-(height/6)],
-            'For-Profit': [90,-90-(height/6)],
-            'Individual': [90,90-(height/6)]
+            'Government': [-90,-90-(height/7)],
+            'Non-Profit': [-90,90-(height/7)],
+            'For-Profit': [90,-90-(height/7)],
+            'Individual': [90,90-(height/7)]
         }
         var isInsideCircle = function (x, y, cx, cy, radius) {
             var dx = x-cx
@@ -382,7 +469,15 @@ angular.module('civic-graph', ['ui.bootstrap', 'leaflet-directive'])
         }
         var scale = {
             'employees': function(e) { return ((e/200000) * 5 )+1.5;},
-            'followers': function(f) { return ((f/11000000) * 5 )+1.5;}
+            'followers': function(f) {
+                if (f > 0 && f <= 500){return 1.5;}
+                else if(f > 500 && f <= 5000){ return 1.8;}
+                else if(f >5000 && f <= 10000){ return 2}
+                else if(f > 10000 && f <= 25000){ return 2.5}
+                else if(f >25000 && f <= 900000){ return 3}
+                else if(f >900000){ return 5}
+                else{return 1}
+                }
         }
 
         var canvas = d3.select('div#canvas-force').append('canvas');
@@ -416,7 +511,7 @@ angular.module('civic-graph', ['ui.bootstrap', 'leaflet-directive'])
         data.nodes.forEach(function(d) {
             var k = scale[$scope.sizeBy](d[$scope.sizeBy]);
             if(isInsideCircle(oX, oY, d.x+offsets[d.type][0], d.y+offsets[d.type][1], 4.5*k)) {
-                $scope.currentEntity = d;
+                $scope.$emit('setCurrentEntity', { value: d });
                 entityFound = true;
                 $scope.setEntity(d);
                 $scope.clickedEntity.entity = d;
@@ -424,12 +519,12 @@ angular.module('civic-graph', ['ui.bootstrap', 'leaflet-directive'])
             }
         });
         if (!entityFound) {
-            $scope.currentEntity = null;
+            $scope.$emit('setCurrentLocation', { value: null });
+            $scope.$emit('setCurrentEntity', { value: null });
         }
         tick();
         $scope.actions.interacted = true
         $scope.safeApply();
-        $("#details-panel").css( "height", "20vh");
         $("#details-panel").scrollTop(0);
     });
         $('#nloader').hide();
@@ -447,18 +542,38 @@ angular.module('civic-graph', ['ui.bootstrap', 'leaflet-directive'])
             var showEntities = {};
             // Draw links.
             context.strokeStyle = '#ccc';
-            _.forEach($scope.connections, function(connections, type) {
+             _.forEach($scope.connections, function(connections, type) {
                 connections.forEach(function(d) {
                     if ($scope.connectionTypes[type] && ($scope.entityTypes[d.target.type] && $scope.entityTypes[d.source.type])) {
-                        if (d.source == $scope.currentEntity || d.target == $scope.currentEntity || !$scope.currentEntity) {
-                            context.beginPath()
-                            context.moveTo(d.source.x+offsets[d.source.type][0], d.source.y+offsets[d.source.type][1]);
-                            context.lineTo(d.target.x+offsets[d.target.type][0], d.target.y+offsets[d.target.type][1]); 
-                            context.strokeStyle = colors[type]['focused']
-                            context.stroke()
-                            context.closePath();
-                            showEntities[d.source.id] = true;
-                            showEntities[d.target.id] = true;
+                        if($scope.currentLocation){
+                            if(d.source.name in $scope.currentLocation.dict && d.target.name in $scope.currentLocation.dict){
+                                context.beginPath()
+
+                                //  Modification - Boundaries      var k = scale[$scope.sizeBy](d[$scope.sizeBy]);
+                                var k = scale[$scope.sizeBy]((d.source)[$scope.sizeBy]);
+                                context.moveTo(Math.max(4.5*k, Math.min(width - 4.5*k, d.source.x+offsets[d.source.type][0])), Math.max(4.5*k, Math.min(height - 4.5*k, d.source.y+offsets[d.source.type][1])));
+                                context.lineTo(Math.max(4.5*k, Math.min(width - 4.5*k, d.target.x+offsets[d.target.type][0])), Math.max(4.5*k, Math.min(height - 4.5*k, d.target.y+offsets[d.target.type][1])));
+
+                                context.strokeStyle = colors[type]['focused']
+                                context.stroke()
+                                context.closePath();
+                            }
+                        }
+                        else{
+                            if (!$scope.currentEntity || d.source == $scope.currentEntity || d.target == $scope.currentEntity) {
+                                context.beginPath()
+
+                                //  Modification - Boundaries
+                                var k = scale[$scope.sizeBy]((d.source)[$scope.sizeBy]);
+                                context.moveTo(Math.max(4.5*k, Math.min(width - 4.5*k, d.source.x+offsets[d.source.type][0])), Math.max(4.5*k, Math.min(height - 4.5*k, d.source.y+offsets[d.source.type][1])));
+                                context.lineTo(Math.max(4.5*k, Math.min(width - 4.5*k, d.target.x+offsets[d.target.type][0])), Math.max(4.5*k, Math.min(height - 4.5*k, d.target.y+offsets[d.target.type][1])));
+
+                                context.strokeStyle = colors[type]['focused']
+                                context.stroke()
+                                context.closePath();
+                                showEntities[d.source.id] = true;
+                                showEntities[d.target.id] = true;
+                            }
                         }
                     }
                 });
@@ -467,23 +582,39 @@ angular.module('civic-graph', ['ui.bootstrap', 'leaflet-directive'])
             data.nodes.forEach(function(d) {
                 if ($scope.entityTypes[d.type]) {
                     var focus;
-                    if (!$scope.currentEntity || showEntities[d.id] || d === $scope.currentEntity){
-                        focus = 'focused';
-                        context.strokeStyle = 'white';
-                        if ($scope.currentEntity) {
+
+                    if($scope.currentLocation){
+                        if(d.name in $scope.currentLocation.dict){
+                            focus = 'focused';
+                            context.strokeStyle = 'white';
                             entityNames.push(d);
                         }
-                    } else {
-                        context.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-                        focus = 'unfocused';
+                        else {
+                            context.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+                            focus = 'unfocused';
+                        }
+                    }
+                    else{
+                        if (!$scope.currentEntity || showEntities[d.id] || d === $scope.currentEntity){
+                            focus = 'focused';
+                            context.strokeStyle = 'white';
+                            if ($scope.currentEntity) {
+                                entityNames.push(d);
+                            }
+                            else{
+                                if (d.wellconnected) {
+                                    entityNames.push(d);
+                                }
+                            }
+                        } else {
+                            context.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+                            focus = 'unfocused';
+                        }
                     }
                     var k = scale[$scope.sizeBy](d[$scope.sizeBy]);
                     context.beginPath();
                     context.fillStyle = colors[d.type][focus];
-                    context.arc(d.x+offsets[d.type][0], d.y+offsets[d.type][1], 4.5*k, 0, 2 * Math.PI);
-                    if (d.wellconnected && !$scope.currentEntity) {
-                        entityNames.push(d);
-                    }
+                    context.arc(Math.max(4.5*k, Math.min(width - 4.5*k, d.x+offsets[d.type][0])), Math.max(4.5*k, Math.min(height - 4.5*k, d.y+offsets[d.type][1])), 4.5*k, 0, 2 * Math.PI);
                     context.fill()
                     context.lineWidth = 1;
                     context.stroke();
@@ -491,11 +622,11 @@ angular.module('civic-graph', ['ui.bootstrap', 'leaflet-directive'])
                 }
             });
             _.forEach(entityNames, function(d){
+                var k = scale[$scope.sizeBy](d[$scope.sizeBy]);
                 context.strokeStyle = 'black';
                 var name = d.nickname ? d.nickname : d.name;
                 context.font='lighter 11px Segoe UI, HelveticaNeue-Light, sans-serif-light, sans-serif';
-                context.strokeText(name, d.x+offsets[d.type][0]-name.length*2, d.y+offsets[d.type][1]+10, 100)
-            });      
+                context.strokeText(name, Math.max(4.5*k, Math.min(width - 4.5*k, d.x+offsets[d.type][0]))-name.length*2, Math.max(4.5*k, Math.min(height - 4.5*k, d.y+offsets[d.type][1]))+10, 100)            });
         }
         var force = d3.layout.force()
             .size([width, height])
@@ -516,30 +647,26 @@ angular.module('civic-graph', ['ui.bootstrap', 'leaflet-directive'])
         $scope.$on('changeSizeBy', function(event, link) {
             tick();
         });
-        $scope.$on('selectEntity', function() {
-            $scope.showLicense = false;
-            $scope.clickedEntity.entity = $scope.currentEntity;
-            $scope.actions.interacted = true;
-            $scope.safeApply();
-            tick();
-        });
-        $('#details-panel').scroll(function() {
-            $(this).css('height','50vh');
-        });
-        $( "#details-panel" ).click(function(e) {
-            if (window.innerHeight/3 > parseInt($(this).css('height'))) {
-            $( this ).css('height','50vh');
-            } else {
-            $( this ).css('height','20vh');
+        $scope.$on('selectItem', function(event, item) {
+            if(item.type === 'location'){
+                $scope.clickedLocation.location = $scope.currentLocation;
+                $scope.$emit('setCurrentEntity', { value: null });
             }
-        });
+            else{
+                $scope.clickedEntity.entity = $scope.currentEntity;
+                $scope.$emit('setCurrentLocation', { value: null });
+            }
+             $scope.actions.interacted = true;
+             $scope.safeApply();
+             tick();
+         });
     }
     var drawNetwork = function() {
         var svg = d3.select('#network');
         var bounds = svg.node().getBoundingClientRect();
         var height = bounds.height;
         var width = bounds.width;
-        var offsetScale = 8;
+        var offsetScale = 6;
         var defaultnodesize = 7;
         var offsets = {
             'Individual': {'x': 1, 'y': 1},
@@ -547,9 +674,11 @@ angular.module('civic-graph', ['ui.bootstrap', 'leaflet-directive'])
             'Non-Profit': {'x': -1, 'y': 1},
             'Government': {'x': -1, 'y': -1}
         }
+        var lowerBoundRadius = 10;
+        var upperBoundRadius = 50;
         var scale = {
-            'employees': d3.scale.sqrt().domain([10, 130000]).range([10, 50]),
-            'followers': d3.scale.sqrt().domain([10, 10000000]).range([10, 50])
+            'employees': d3.scale.sqrt().domain([10, 130000]).range([lowerBoundRadius, upperBoundRadius]),
+            'followers': d3.scale.sqrt().domain([10, 10000000]).range([lowerBoundRadius, upperBoundRadius])
         }
         var links = {};
         var force = d3.layout.force()
@@ -557,7 +686,7 @@ angular.module('civic-graph', ['ui.bootstrap', 'leaflet-directive'])
             .nodes($scope.entities)
             .links(_.flatten(_.values($scope.connections)))
             .charge(function(d) {
-                return d.employees ? -2*scale.employees(d.employees) : -25;
+                return d.employees ? -2*scale.employees(d.employees) : -20;
             })
             .linkStrength(0)
             .linkDistance(50);
@@ -590,6 +719,8 @@ angular.module('civic-graph', ['ui.bootstrap', 'leaflet-directive'])
             _.forEach($scope.entities, function(entity) {
                 entity.x += offsets[entity.type].x*k;
                 entity.y += offsets[entity.type].y*k;
+                entity.x = Math.max(upperBoundRadius, Math.min(width - upperBoundRadius, entity.x));
+                entity.y = Math.max(upperBoundRadius, Math.min(height - upperBoundRadius, entity.y));
             });
 
             _.forEach(links, function(link, type) {
@@ -692,12 +823,68 @@ angular.module('civic-graph', ['ui.bootstrap', 'leaflet-directive'])
             $scope.actions.interacted = true;
             $scope.safeApply();
         }
+        var focusLocation = function(location) {
+            //  If the current entity is shown and it doesn't match the clicked node, then set the new node to clicked.
+            $scope.safeApply();
 
+            node.classed('focused', function(n){
+              return n.name in location.dict
+            })
+            .classed('unfocused', function(n){
+              return !(n.name in location.dict)
+            });
+
+            _.forEach(links, function(link, type){
+              link
+              .classed('focused', function(o){
+                return (o.source.name in location.dict && o.target.name in location.dict);
+              })
+              .classed('unfocused', function(o){
+                return !(o.source.name in location.dict) || !(o.target.name in location.dict);
+              })
+            })
+        }
+
+        var unfocusLocation = function(location){
+            node
+            .classed('focused', false)
+            .classed('unfocused', false);
+            _.forEach(links, function(link, type) {
+                link
+                .classed('focused', false)
+                .classed('unfocused', false);
+            });
+
+            if ($scope.clickedLocation.location) force.resume();
+        };
+
+        var highlightLocation = function(location){
+            $scope.showLicense = false;
+            if($scope.clickedEntity.entity){
+                unfocus($scope.clickedEntity.entity);
+                $scope.clickedEntity.entity = null;
+            }
+            if($scope.clickedLocation.location !== location){
+                unfocusLocation($scope.clickedLocation.location);
+                $scope.clickedLocation.location = location;
+                focusLocation(location);
+            }
+            if (d3.event) {d3.event.stopPropagation();}
+            $scope.actions.interacted = true
+            $scope.safeApply();
+        }
         var click = function(entity) {
             $scope.showLicense = false;
+
+            if($scope.clickedLocation.location) {
+                unfocusLocation($scope.clickedLocation.entity);
+                $scope.clickedLocation.location = null;
+            }
+            //  If the previous node is equal to the new node, do nothing.
             if ($scope.clickedEntity.entity == entity) {
                 $scope.clickedEntity.entity = null;
             } else {
+                //  Unfocus on previous node and focus on new node.
                 if ($scope.clickedEntity.entity) unfocus($scope.clickedEntity.entity);
                 $scope.clickedEntity.entity = entity;
                 focus(entity);
@@ -710,6 +897,18 @@ angular.module('civic-graph', ['ui.bootstrap', 'leaflet-directive'])
             $scope.safeApply();
         }
 
+        var backgroundclick = function() {
+            if ($scope.clickedLocation.location) {
+                unfocus($scope.clickedLocation.location);
+                $scope.clickedLocation.location = null;
+            }
+            if ($scope.clickedEntity.entity) {
+                unfocus($scope.clickedEntity.entity);
+                $scope.clickedEntity.entity = null;
+            }
+            $scope.safeApply();
+            //TODO: Show generic details and not individual entity details.
+        }
         var dblclick = function(entity) {
             if (entity.fixed == false) {
                 entity.x = width/2;
@@ -725,23 +924,24 @@ angular.module('civic-graph', ['ui.bootstrap', 'leaflet-directive'])
             $scope.safeApply();
         }
 
-        var backgroundclick = function() {
-            if ($scope.clickedEntity.entity) {
-                unfocus($scope.clickedEntity.entity);
-                $scope.clickedEntity.entity = null;
-            }
-            $scope.safeApply();
-            //TODO: Show generic details and not individual entity details.
-        }
+        // var backgroundclick = function() {
+        //     if ($scope.clickedEntity.entity) {
+        //         unfocus($scope.clickedEntity.entity);
+        //         $scope.clickedEntity.entity = null;
+        //     }
+        //     $scope.safeApply();
+        //     //TODO: Show generic details and not individual entity details.
+        // }
         node.on('mouseover', hover);
         node.on('mouseout', unhover);
         node.on('click', click);
         node.on('dblclick', dblclick);
         svg.on('click', backgroundclick);
-        $scope.$on('selectEntity', function() {
-            dblclick($scope.currentEntity);
-        })
-        // Only show labels on top 5 most connected entities initially.
+        // $scope.$on('selectItem', function(event, item) {
+        //     if(item.type !== 'location'){
+        //         dblclick($scope.currentEntity);
+        //     }
+        // })        // Only show labels on top 5 most connected entities initially.
         _.forEach(_.keys($scope.entityTypes), function(type) {
             // Find the top 5 most-connected entities.
             var top5 = _.takeRight(_.sortBy(_.filter($scope.entities, {'type': type}), 'weight'), 5);
@@ -758,12 +958,12 @@ angular.module('civic-graph', ['ui.bootstrap', 'leaflet-directive'])
             .attr('r', function(d) {return d[sizeBy] ? scale[sizeBy](d[sizeBy]) : defaultnodesize;});
         });
         $scope.$on('toggleLink', function(event, link) {
-            console.log("ToggleLink");  
+            console.log("ToggleLink");
             links[link.name]
             .classed({'visible': link.enabled, 'hidden': !link.enabled});
         });
         $scope.$on('toggleNode', function(event, type) {
-            console.log("ToggleNode");  
+            console.log("ToggleNode");
             svg
             .selectAll('.'+type.name+'-node')
             .classed({'visible': type.enabled, 'hidden': !type.enabled});
@@ -783,8 +983,13 @@ angular.module('civic-graph', ['ui.bootstrap', 'leaflet-directive'])
 
         });
 
-        $scope.$on('selectEntity', function(event) {
-            click($scope.currentEntity);
+        $scope.$on('selectItem', function(event, item){
+            if(item.type === 'location'){
+                highlightLocation($scope.currentLocation);
+            }
+            else{
+                click($scope.currentEntity);
+            }
         });
         // Focus the entity if it's in URL params.
         if ($scope.getURLID()){
@@ -806,6 +1011,7 @@ angular.module('civic-graph', ['ui.bootstrap', 'leaflet-directive'])
             zoom: 3
         },
         defaults: {
+            tileLayer:'https://api.tiles.mapbox.com/v4/mapbox.light/{z}/{x}/{y}.png?access_token=pk.eyJ1IjoiZGF2aWRscm50IiwiYSI6IjA0M2RkNzMzZWJmNzEzNGYzMTdhYTExYzAyZmU4ZTE1In0.TNYlFta2VItrkn4L0Z9BJQ',
             tileLayerOptions: {
                 detectRetina: true,
                 reuseTiles: false
@@ -848,6 +1054,7 @@ angular.module('civic-graph', ['ui.bootstrap', 'leaflet-directive'])
             map.invalidateSize();
             new L.Control.Zoom({position: 'topright'}).addTo(map);
             L.control.locate({position: 'topright', showPopup: false, icon:'fa fa-location-arrow'}).addTo(map);
+            var zoomDisplayed;
             var clusterIcon = function(cluster) {
                 var children = cluster.getAllChildMarkers();
                 var total = children.length;
@@ -859,28 +1066,59 @@ angular.module('civic-graph', ['ui.bootstrap', 'leaflet-directive'])
                 var html = createPieChart({data: counts, r: r, strokeWidth: strokeWidth});
                 return new L.DivIcon({html: html, className: 'marker-cluster', iconSize: new L.point(iconDim, iconDim)});
             }
-            var markers = L.markerClusterGroup({spiderfyOnMaxZoom: true, showCoverageOnHover: false, iconCreateFunction: clusterIcon, disableClusteringAtZoom: 10});
+
+            var markerIcon = {
+                'Non-Profit' : L.icon({
+                iconUrl: 'img/marker-nonprof.svg',
+                iconSize:[60, 60]
+                }),
+                'For-Profit' : L.icon({
+                iconUrl: 'img/marker-prof.svg',
+                iconSize:[60, 60]
+                }),
+                'Individual' : L.icon({
+                iconUrl: 'img/marker-ind.svg',
+                iconSize:[60, 60]
+                }),
+                'Government' : L.icon({
+                iconUrl: 'img/marker-gov.svg',
+                iconSize:[60, 60]
+                })
+            }
+
+            var markers = L.markerClusterGroup({spiderfyOnMaxZoom: true, showCoverageOnHover: false, iconCreateFunction: clusterIcon, maxClusterRadius: 30, spiderfyDistanceMultiplier: 1.3});
             _.forEach($scope.entities, function(entity) {
                 _.forEach(entity.locations, function(loc) {
-                    var m = L.marker(loc.coordinates, {'title': entity.name, 'entity_id': entity.id, 'message': entity.name, 'type': entity.type});
-                    markers.addLayer(m);
+                    if (_.every(loc.coordinates)) {
+                        if ( loc.coordinates[0].toFixed(5) == 40.78200 && loc.coordinates[1].toFixed(5) == -73.83170) {
+                        loc.coordinates[0] = 40.77065;
+                        loc.coordinates[1] = -73.97406;
+                        }
+                        var m = L.marker(loc.coordinates, {icon: markerIcon[entity.type], 'title': entity.name, 'entity_id': entity.id, 'message': entity.name, 'type': entity.type});
+                        markers.addLayer(m);
+                    };
                 });
             });
             map.addLayer(markers);
             map.locate({setView: true, maxZoom: 11});
+                   markers.on('clusterclick', function (a) {
+                console.log('cluster ' + a.layer.getAllChildMarkers().length);
+            });
             markers.on('click', function(marker) {
+                console.log('clickm')
                 $scope.setEntityID(marker.layer.options.entity_id);
                 $scope.clickedEntity.entity = $scope.currentEntity;
                 $scope.actions.interacted = true;
-                if ($scope.settingsEnabled) {$scope.toggleSettings()};
+                if ($scope.settingsEnabled && $scope.mobile) {$scope.toggleSettings()};
                 $scope.safeApply();
             });
+
             map.on('click', function() {
                 $scope.clickedEntity.entity = null;
                 $scope.actions.interacted = true;
                 $scope.safeApply();
             });
-            $scope.$on('selectEntity', function() {
+            $scope.$on('selectItem', function() {
                 var coordinates = $scope.currentEntity.locations.length > 0 ? _.pluck($scope.currentEntity.locations, 'coordinates') : null;
                 if (coordinates.length > 0) {
                     map.setView(coordinates[0], 11);
@@ -890,5 +1128,4 @@ angular.module('civic-graph', ['ui.bootstrap', 'leaflet-directive'])
             });
         });
     });
-
 }]);
